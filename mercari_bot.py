@@ -1,92 +1,80 @@
-import requests
 import os
-import re
 import json
+import requests
 
-URLS = os.getenv("SEARCH_URLS", "").splitlines()
-SERVER_KEY = os.getenv("SERVER_SENDKEY")
+# 🔹 从 GitHub Secrets 里读变量
+SEARCH_URLS = os.getenv("SEARCH_URLS", "").splitlines()
+SERVER_SENDKEY = os.getenv("SERVER_SENDKEY", "")
 
-TEST_MODE = False
-seen = set()
+# ✅ 设置 headers 模拟 App
+HEADERS = {
+    "User-Agent": "Mercari_r/14352 CFNetwork/1399 Darwin/22.1.0",
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+}
 
-def send_wechat(text):
-    url = f"https://sctapi.ftqq.com/{SERVER_KEY}.send"
-    data = {"title": "Mercari 新上架提醒", "desp": text}
+SEEN_FILE = "seen.json"
+seen_items = {}
+
+# 读取历史已推送商品
+if os.path.exists(SEEN_FILE):
+    with open(SEEN_FILE, "r", encoding="utf-8") as f:
+        seen_items = json.load(f)
+
+def send_push(title, link, price):
+    if not SERVER_SENDKEY:
+        print("⚠️ 没有配置 Server酱，无法推送")
+        return
+    url = f"https://sctapi.ftqq.com/{SERVER_SENDKEY}.send"
+    data = {
+        "title": title,
+        "desp": f"{title}\n价格: {price}\n[点我查看]({link})"
+    }
     try:
         r = requests.post(url, data=data)
-        print("推送结果:", r.status_code, r.text[:200])
+        print("推送结果:", r.text)
     except Exception as e:
         print("推送失败:", e)
 
-def parse_webpage(url):
+def check_url(url):
+    print(f"请求地址: {url}")
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/122.0.0.0 Safari/537.36"
-        }
-        res = requests.get(url, headers=headers)
-        print("请求地址:", url)
-        print("返回状态:", res.status_code)
+        resp = requests.get(url, headers=HEADERS)
+        print("返回状态:", resp.status_code)
 
-        if res.status_code != 200:
-            print("Fetch failed:", res.status_code)
-            return []
+        if resp.status_code != 200:
+            print("请求失败:", resp.text[:200])
+            return
 
-        html = res.text
-        json_text = None
+        data = resp.json()
+        items = data.get("items", [])
+        if not items:
+            print("❌ 没有新商品")
+            return
 
-        # 方法1: <script id="__NEXT_DATA__">
-        match1 = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.S)
-        if match1:
-            json_text = match1.group(1)
-
-        # 方法2: window.__NEXT_DATA__ = {...};
-        if not json_text:
-            match2 = re.search(r'window\.__NEXT_DATA__\s*=\s*(\{.*?\});', html, re.S)
-            if match2:
-                json_text = match2.group(1)
-
-        if not json_text:
-            print("❌ 未找到 JSON，调试输出前500字符：")
-            print(html[:500])
-            return []
-
-        data = json.loads(json_text)
-        items = data.get("props", {}).get("pageProps", {}).get("initialSearchResult", {}).get("items", [])
-
-        results = []
-        for it in items:
-            item_id = it.get("id")
-            if not item_id or item_id in seen:
-                continue
-            seen.add(item_id)
-            title = it.get("name") or "无标题"
-            price = it.get("price") or "?"
+        for item in items[:5]:  # 只看最新 5 个
+            item_id = item.get("id")
+            title = item.get("name")
+            price = item.get("price")
             link = f"https://jp.mercari.com/item/{item_id}"
-            results.append(f"{title} - ¥{price}\n{link}")
-        return results
+
+            if item_id not in seen_items:
+                print("🆕 新商品:", title, price, link)
+                send_push(title, link, price)
+                seen_items[item_id] = True
     except Exception as e:
-        print("解析失败:", e)
-        return []
+        print("Error:", e)
 
 def main():
-    all_new = []
-    for url in URLS:
-        if not url.strip():
+    for url in SEARCH_URLS:
+        url = url.strip()
+        if not url:
             continue
-        new_items = parse_webpage(url.strip())
-        if new_items:
-            all_new.extend(new_items)
+        check_url(url)
 
-    if all_new:
-        send_wechat("\n\n".join(all_new))
-        print("推送成功:", len(all_new))
-    else:
-        print("没有新商品")
+    # 保存已推送商品
+    with open(SEEN_FILE, "w", encoding="utf-8") as f:
+        json.dump(seen_items, f, ensure_ascii=False)
 
 if __name__ == "__main__":
-    if TEST_MODE:
-        send_wechat("这是 Mercari 网页版推送测试 🐺💌")
-    else:
-        main()
+    main()
