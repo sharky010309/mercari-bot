@@ -1,14 +1,12 @@
 import requests
 import os
-import uuid
+import re
+import json
 
-# 从 GitHub Secrets 读取配置
 URLS = os.getenv("SEARCH_URLS", "").splitlines()
 SERVER_KEY = os.getenv("SERVER_SENDKEY")
 
-# 开关：True = 强制推送测试消息
 TEST_MODE = False
-
 seen = set()
 
 def send_wechat(text):
@@ -20,48 +18,43 @@ def send_wechat(text):
     except Exception as e:
         print("推送失败:", e)
 
-def make_headers():
-    """生成 Mercari API 请求头"""
-    return {
-        "User-Agent": "Mercari_r/7450 CFNetwork/1390 Darwin/22.0.0",
-        "Accept": "*/*",
-        "Accept-Language": "ja-JP,ja;q=0.9",
-        "Content-Type": "application/json",
-        "X-Platform": "ios",
-        "X-APP-VERSION": "2025.9.0",
-        "X-Client-Info": '{"platform":"ios","appVersion":"2025.9.0"}',
-        # 随机生成一个设备 ID，避免被拒绝
-        "X-Device-Id": str(uuid.uuid4())
-    }
-
-def check_url(url):
+def parse_webpage(url):
     try:
-        headers = make_headers()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/122.0.0.0 Safari/537.36"
+        }
         res = requests.get(url, headers=headers)
         print("请求地址:", url)
         print("返回状态:", res.status_code)
 
         if res.status_code != 200:
-            print("Fetch failed:", res.status_code, res.text[:200])
+            print("Fetch failed:", res.status_code)
             return []
 
-        data = res.json()
-        print("返回JSON示例:", str(data)[:500])  # 打印前500字符，调试用
+        # 提取 __NEXT_DATA__ JSON
+        match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', res.text, re.S)
+        if not match:
+            print("未找到 __NEXT_DATA__")
+            return []
 
-        items = data.get("items") or data.get("data") or []
-        new_items = []
+        data = json.loads(match.group(1))
+        items = data.get("props", {}).get("pageProps", {}).get("initialSearchResult", {}).get("items", [])
+
+        results = []
         for it in items:
-            item_id = it.get("id") or it.get("itemId") or it.get("item_id")
+            item_id = it.get("id")
             if not item_id or item_id in seen:
                 continue
             seen.add(item_id)
-            title = it.get("name") or it.get("title") or "无标题"
+            title = it.get("name") or "无标题"
             price = it.get("price") or "?"
             link = f"https://jp.mercari.com/item/{item_id}"
-            new_items.append(f"{title} - ¥{price}\n{link}")
-        return new_items
+            results.append(f"{title} - ¥{price}\n{link}")
+        return results
     except Exception as e:
-        print("Error:", e)
+        print("解析失败:", e)
         return []
 
 def main():
@@ -69,7 +62,7 @@ def main():
     for url in URLS:
         if not url.strip():
             continue
-        new_items = check_url(url.strip())
+        new_items = parse_webpage(url.strip())
         if new_items:
             all_new.extend(new_items)
 
@@ -81,6 +74,6 @@ def main():
 
 if __name__ == "__main__":
     if TEST_MODE:
-        send_wechat("这是一个 Mercari 推送链路测试消息 🐺💌")
+        send_wechat("这是 Mercari 网页版推送测试 🐺💌")
     else:
         main()
