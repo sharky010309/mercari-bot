@@ -2,15 +2,17 @@ import os
 import json
 import requests
 
-# 🔹 从 GitHub Secrets 里读变量
+# 🔹 从 GitHub Secrets 里读取配置
 SEARCH_URLS = os.getenv("SEARCH_URLS", "").splitlines()
 SERVER_SENDKEY = os.getenv("SERVER_SENDKEY", "")
 
-# ✅ 设置 headers 模拟 App
+# ✅ 模拟 Mercari iOS App 请求头（完整版）
 HEADERS = {
     "User-Agent": "Mercari_r/14352 CFNetwork/1399 Darwin/22.1.0",
     "Accept": "application/json",
     "Content-Type": "application/json",
+    "X-Platform": "iOS",
+    "X-Client-Info": "app/1.0.0 (iOS 16.0; iPhone14,3)"  # 可以随便填，不要空
 }
 
 SEEN_FILE = "seen.json"
@@ -19,7 +21,10 @@ seen_items = {}
 # 读取历史已推送商品
 if os.path.exists(SEEN_FILE):
     with open(SEEN_FILE, "r", encoding="utf-8") as f:
-        seen_items = json.load(f)
+        try:
+            seen_items = json.load(f)
+        except:
+            seen_items = {}
 
 def send_push(title, link, price):
     if not SERVER_SENDKEY:
@@ -43,10 +48,17 @@ def check_url(url):
         print("返回状态:", resp.status_code)
 
         if resp.status_code != 200:
-            print("请求失败:", resp.text[:200])
+            print("请求失败:", resp.text[:300])
             return
 
-        data = resp.json()
+        # 尝试解析 JSON
+        try:
+            data = resp.json()
+        except Exception:
+            print("❌ 返回不是 JSON，前500字符如下：")
+            print(resp.text[:500])
+            return
+
         items = data.get("items", [])
         if not items:
             print("❌ 没有新商品")
