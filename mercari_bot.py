@@ -33,13 +33,26 @@ def parse_webpage(url):
             print("Fetch failed:", res.status_code)
             return []
 
-        # 提取 __NEXT_DATA__ JSON
-        match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', res.text, re.S)
-        if not match:
-            print("未找到 __NEXT_DATA__")
+        html = res.text
+        json_text = None
+
+        # 方法1: <script id="__NEXT_DATA__">
+        match1 = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.S)
+        if match1:
+            json_text = match1.group(1)
+
+        # 方法2: window.__NEXT_DATA__ = {...};
+        if not json_text:
+            match2 = re.search(r'window\.__NEXT_DATA__\s*=\s*(\{.*?\});', html, re.S)
+            if match2:
+                json_text = match2.group(1)
+
+        if not json_text:
+            print("❌ 未找到 JSON，调试输出前500字符：")
+            print(html[:500])
             return []
 
-        data = json.loads(match.group(1))
+        data = json.loads(json_text)
         items = data.get("props", {}).get("pageProps", {}).get("initialSearchResult", {}).get("items", [])
 
         results = []
