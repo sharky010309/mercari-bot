@@ -5,7 +5,7 @@ import os
 URLS = os.getenv("SEARCH_URLS", "").splitlines()
 SERVER_KEY = os.getenv("SERVER_SENDKEY")
 
-# 开关：True = 强制推送测试消息，不跑逻辑
+# 开关：True = 强制推送测试消息
 TEST_MODE = False
 
 seen = set()
@@ -21,15 +21,25 @@ def send_wechat(text):
 
 def check_url(url):
     try:
-        res = requests.get(url, headers={
-            "User-Agent": "Mercari_r/14352 CFNetwork/1399 Darwin/22.1.0",
-            "Accept": "application/json"
-        })
+        headers = {
+            "User-Agent": "Mercari_r/7450 CFNetwork/1390 Darwin/22.0.0",
+            "Accept": "*/*",
+            "Accept-Language": "ja-JP,ja;q=0.9",
+            "Content-Type": "application/json",
+            "X-Platform": "iOS",
+            "X-APP-VERSION": "2025.9.0"
+        }
+        res = requests.get(url, headers=headers)
+        print("请求地址:", url)
+        print("返回状态:", res.status_code)
+
         if res.status_code != 200:
-            print("Fetch failed:", res.status_code)
+            print("Fetch failed:", res.status_code, res.text[:200])
             return []
 
         data = res.json()
+        print("返回JSON示例:", str(data)[:500])  # 打印前500字符，调试用
+
         items = data.get("items") or data.get("data") or []
         new_items = []
         for it in items:
