@@ -2,15 +2,22 @@ import requests
 import os
 
 # 从 GitHub Secrets 读取配置
-URLS = os.getenv("SEARCH_URLS", "").split(",")
+URLS = os.getenv("SEARCH_URLS", "").splitlines()
 SERVER_KEY = os.getenv("SERVER_SENDKEY")
+
+# 开关：True = 强制推送测试消息，不跑逻辑
+TEST_MODE = True
 
 seen = set()
 
 def send_wechat(text):
     url = f"https://sctapi.ftqq.com/{SERVER_KEY}.send"
     data = {"title": "Mercari 新上架提醒", "desp": text}
-    requests.post(url, data=data)
+    try:
+        r = requests.post(url, data=data)
+        print("推送结果:", r.status_code, r.text[:200])
+    except Exception as e:
+        print("推送失败:", e)
 
 def check_url(url):
     try:
@@ -55,4 +62,7 @@ def main():
         print("没有新商品")
 
 if __name__ == "__main__":
-    main()
+    if TEST_MODE:
+        send_wechat("这是一个 Mercari 推送链路测试消息 🐺💌")
+    else:
+        main()
