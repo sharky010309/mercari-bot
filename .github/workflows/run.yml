@@ -2,7 +2,7 @@ name: Mercari Monitor
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # 每10分钟运行一次（可以改成 */5 表示5分钟）
+    - cron: "*/5 * * * *"   # 每10分钟运行一次（可以改成 */5 表示5分钟）
   workflow_dispatch:         # 允许手动触发
 
 jobs:
