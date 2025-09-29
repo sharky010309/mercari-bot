@@ -1,5 +1,6 @@
 import requests
 import os
+import uuid
 
 # 从 GitHub Secrets 读取配置
 URLS = os.getenv("SEARCH_URLS", "").splitlines()
@@ -19,16 +20,23 @@ def send_wechat(text):
     except Exception as e:
         print("推送失败:", e)
 
+def make_headers():
+    """生成 Mercari API 请求头"""
+    return {
+        "User-Agent": "Mercari_r/7450 CFNetwork/1390 Darwin/22.0.0",
+        "Accept": "*/*",
+        "Accept-Language": "ja-JP,ja;q=0.9",
+        "Content-Type": "application/json",
+        "X-Platform": "ios",
+        "X-APP-VERSION": "2025.9.0",
+        "X-Client-Info": '{"platform":"ios","appVersion":"2025.9.0"}',
+        # 随机生成一个设备 ID，避免被拒绝
+        "X-Device-Id": str(uuid.uuid4())
+    }
+
 def check_url(url):
     try:
-        headers = {
-            "User-Agent": "Mercari_r/7450 CFNetwork/1390 Darwin/22.0.0",
-            "Accept": "*/*",
-            "Accept-Language": "ja-JP,ja;q=0.9",
-            "Content-Type": "application/json",
-            "X-Platform": "iOS",
-            "X-APP-VERSION": "2025.9.0"
-        }
+        headers = make_headers()
         res = requests.get(url, headers=headers)
         print("请求地址:", url)
         print("返回状态:", res.status_code)
