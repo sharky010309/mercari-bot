@@ -6,7 +6,7 @@ URLS = os.getenv("SEARCH_URLS", "").splitlines()
 SERVER_KEY = os.getenv("SERVER_SENDKEY")
 
 # 开关：True = 强制推送测试消息，不跑逻辑
-TEST_MODE = True
+TEST_MODE = False
 
 seen = set()
 
