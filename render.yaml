@@ -1,2 +1,7 @@
-requests
-beautifulsoup4
+services:
+  - type: worker
+    name: mercari-bot
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python mercari_bot.py"
