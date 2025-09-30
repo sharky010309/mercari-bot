@@ -1,38 +1,32 @@
 import os
 import json
 import requests
+import time
 
-# 🔹 从 GitHub Secrets 里读取配置
+# 从 Render 环境变量读取配置
 SEARCH_URLS = os.getenv("SEARCH_URLS", "").splitlines()
 SERVER_SENDKEY = os.getenv("SERVER_SENDKEY", "")
 
-# ✅ 模拟 Mercari iOS App 请求头（完整版）
+# 模拟 Mercari iOS App 请求头（完整版）
 HEADERS = {
     "User-Agent": "Mercari_r/14352 CFNetwork/1399 Darwin/22.1.0",
     "Accept": "application/json",
     "Content-Type": "application/json",
     "X-Platform": "iOS",
-    "X-Client-Info": "app/1.0.0 (iOS 16.0; iPhone14,3)"  # 可以随便填，不要空
+    "X-Client-Info": "app/1.0.0 (iOS 16.0; iPhone14,3)"  # 随便填，不要空
 }
 
-SEEN_FILE = "seen.json"
+# 保存已推送的商品 ID，避免重复
 seen_items = {}
 
-# 读取历史已推送商品
-if os.path.exists(SEEN_FILE):
-    with open(SEEN_FILE, "r", encoding="utf-8") as f:
-        try:
-            seen_items = json.load(f)
-        except:
-            seen_items = {}
-
 def send_push(title, link, price):
+    """推送到 Server酱"""
     if not SERVER_SENDKEY:
         print("⚠️ 没有配置 Server酱，无法推送")
         return
     url = f"https://sctapi.ftqq.com/{SERVER_SENDKEY}.send"
     data = {
-        "title": title,
+        "title": f"Mercari 新品：{title}",
         "desp": f"{title}\n价格: {price}\n[点我查看]({link})"
     }
     try:
@@ -42,7 +36,8 @@ def send_push(title, link, price):
         print("推送失败:", e)
 
 def check_url(url):
-    print(f"请求地址: {url}")
+    """抓取一个搜索链接"""
+    print(f"👉 请求地址: {url}")
     try:
         resp = requests.get(url, headers=HEADERS)
         print("返回状态:", resp.status_code)
@@ -61,32 +56,35 @@ def check_url(url):
 
         items = data.get("items", [])
         if not items:
-            print("❌ 没有新商品")
+            print("❌ 没有新商品（items为空）")
             return
 
-        for item in items[:5]:  # 只看最新 5 个
+        # 打印前3个商品，作为测试
+        for item in items[:3]:
             item_id = item.get("id")
             title = item.get("name")
             price = item.get("price")
             link = f"https://jp.mercari.com/item/{item_id}"
+            print("🆕 抓到商品:", title, price, link)
 
+            # 如果是新商品就推送
             if item_id not in seen_items:
-                print("🆕 新商品:", title, price, link)
                 send_push(title, link, price)
                 seen_items[item_id] = True
+
     except Exception as e:
         print("Error:", e)
 
 def main():
-    for url in SEARCH_URLS:
-        url = url.strip()
-        if not url:
-            continue
-        check_url(url)
-
-    # 保存已推送商品
-    with open(SEEN_FILE, "w", encoding="utf-8") as f:
-        json.dump(seen_items, f, ensure_ascii=False)
+    """主循环，每隔 60s 跑一次"""
+    while True:
+        for url in SEARCH_URLS:
+            url = url.strip()
+            if not url:
+                continue
+            check_url(url)
+        print("⏳ 本轮结束，等待 60 秒...\n")
+        time.sleep(60)
 
 if __name__ == "__main__":
     main()
